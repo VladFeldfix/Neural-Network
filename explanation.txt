@@ -1,0 +1,107 @@
+It's just a fancy term for the chain rule (derivative of a compound function)
+The derivative of f(g(x)) is f'(g(x)) • g'(x).  So backpropagation says, let's first calculate f'(g(x)), and then multiply the result by g'(x)
+Since we applied f after g, we call that "backpropagation" (start with calculating the derivative of the last function you applied, and then move backward towards the first functions you applied, calculating the derivatives one at a time and immediately multiplying the derivative you have so far before moving on to the next layer)
+Backpropagation doesn't tell you how much to adjust the weights, it *only* calculates the derivatives with respect to each of the weights (a.k.a. the "gradient")
+You need an optimization method (like gradient descent, or Adagrad) to tell you how much to adjust the weights.  Almost all optimization methods use the gradient, which is why you would want to do backpropagation (so you can get it)
+In gradient descent for instance, what you should do here is calculate the gradient with respect to w1, w2, and b (using backpropagation).  Then, take their current values, and subtract the gradient from that
+You might ask, "what's the point of backpropagation?" 
+The point is that since you immediately calculate all the products while moving backwards through your function, you never have to store all of the individual layer derivatives at the same time, you only ever need to store one layer's derivatives at a time (just long enough to multiply it by the derivative of the loss function with respect to that layer's output, so you can get the derivative of the loss function with respect to that layer's input)
+You might ask, "why specifically move backwards through the model instead of forwards?"
+
+
+Good question.  You can in fact calculate the gradient in that direction (PyTorch supports it, it's called "dual mode"), but since you generally have more inputs than outputs, it allows you to be more memory-efficient to go backwards
+So, for instance, if we want to calculate the gradient w.r.t. w1, we do:
+dL/dw1 = dL/dy • dy/df • df/da • da/dw1.
+
+
+First do forward propagation.  You didn't choose any particular loss function L, so I'll go with MSE loss (the squared difference between what your model gives (0.65 in this case) and what you want it to give (1 in this case)):
+a = 1.65•w1+b + 1.93•w2 + b
+You didn't say what w1, w2, and b start as, so I'll just assume that w1=1, w2=0, b=2.  So:
+a=5.65
+f(a)=1 / (1 + e^-5.65) = 0.996
+y = f(a) = 0.996
+L(y) = (1 - 0.996)^2 = 0.00001228633
+
+
+Then, do backpropagation to compute dL/dw1 (the derivative of the loss function w.r.t. w1), starting from the end and moving backwards:
+
+
+dL/dy = 2•(1-0.996) = 0.008
+
+
+dy/df = 1 (because y=f).  Since we're doing backpropagation, immediately calculate dL/dy•dy/df before moving on:
+0.008•1 = 0.008
+
+
+df/da = a • e^a/(1+e^a)² = 5.65•e^5.65/(1+e^5.65)² ≈ 0.0197.  Since we're doing backpropagation, immediately calculate (dL/dy • dy/df) • df/da before moving on:
+(dL/dy • dy/df) • df/da = 0.008•0.0197=0.0001576
+
+
+da/dw1 = x1 = 1.65
+Again, backpropagation says to immediately calculate (dL/dy • dy/df • df/da) • da/dw1 = 0.0001576•1.65 = 0.00026004
+
+
+So now you know that dL/dw1 = 0.00026004
+
+
+Gradient descent says to subtract the gradient from w1, so we update:
+w1 = w1-0.00026004 = 1 - 0.00026004 = 0.99973996
+Gradient descent really tells you to update all of your weights, but for simplicity in this case, I'll only update w1.  After the update, you get:
+y=f(a)=f(x1*w1 + 2 + x2*0 + 2)=f(1.65*0.99973996 + 2 + 1.93*0 + 2)=f(5.649570934)=1 / (1 + e^-5.649570934)=0.99649331377
+
+
+Note that before you got 0.996, so our new output is closer to the output we wanted (1).  So gradient descent has worked at making you closer to the solution
+One final note: gradient descent also allows you to multiply the gradient by a constant before subtracting it from w1.  So for instance, perhaps you want to multiply it by 0.001 first.  That would make your new w1 = 1-0.001*0.00026004 = 0.99999973996, which makes your new output
+y=f(a)=f(x1*w1 + 2 + x2*0 + 2)=f(1.65*0.99999973996 + 2 + 1.93*0 + 2)=f(5.64999957093)=1 / (1 + e^-5.64999957093)=0.99649481128, which is even *closer* to your desired solution (1)
+You might ask, "why did you choose to multiply it by 0.001 in particular"?  
+
+
+Well, the theory says that you need to multiply it by something less than the maximal eigenvalue of the second derivative (the Hessian).  Since I didn't want to compute the Hessian or compute its eigenvalues, I just guessed that it was more than 0.001 (in this case, it looks like I was right).  The closer you get to that eigenvalue (without passing it!), the better your update will be, but since finding it exactly takes work, I just decided to be lazy and just guess at it.  In practice, that's often a good choice, since it can sometimes be better to spend your time doing a few imperfect gradient descent updates instead of doing one perfect gradient descent update (because computing that maximal eigenvalue takes a lot of time!)
+The last thing you might ask (wow, you're really curious today!) is, why did I assume w2=0, w1=1, b=2?  In fact, how should you choose where to start?  
+
+
+There's a lot of theory about that, but in a nutshell, you can't do much better than picking a random starting point and hoping that it's not too far from the optimal solution.  Neural networks generally choose the starting point by sampling from a random Gaussian (normal) distribution
+But okay, here's what you're missing: you need to choose a loss function and implement it, you need to choose an optimization algorithm and implement it, and (if you choose an optimization algorithm that uses the gradient) you need to implement backpropagation to compute the gradient with respect to your weights.  Note: gradient is just another word for derivative.  (Sort of.  But I won't go into the difference here)
+A loss function is a function that takes the output of your neuron and compares it against the outputs you wanted, and then gives you a number to represent how close they are.  You choose your loss function in such a way that the closer they are, the lower the loss function will be.  It tells you how well your neuron is doing its job right now
+An optimization algorithm is an algorithm that adjusts the neuron's weights to try to make the loss function lower
+For simplicity, I'll choose some for you
+- Loss function: MSE loss.  In a nutshell: take the distance between what you have and what you want, and square it
+- Optimization algorithm: gradient descent.  In a nutshell: just subtract the gradient from the weights (it might not be obvious why that makes the loss function lower, but you'll just have to trust me on that for now)
+(I'm only going to show you how to update w1, the rest of them are similar.  If you want help on them, just let me know)
+So your code:
+
+
+GOAL = 1
+loss = MSE_loss(y, GOAL)
+w1_derivative = backpropagation(y, ans, n1, x1)
+w1 = gradient_descent(w1, w1_derivative)
+def MSE_loss(current_y, desired_y):
+    return (current_y - desired_y)**2
+LR = 0.001  # why did I choose 0.001 in particular?
+
+
+def gradient_descent(current_weight, derivative):
+    return current_weight - LR*derivative
+# computes d(loss)/d(w1), meaning the derivative of the loss function with respect to w1
+# how should I compute d(loss)/d(w1)?  With the chain rule: 
+# d(loss)/d(w1) = d(loss)/dy • dy/d(ans) • d(ans)/d(n1) • d(n1)/d(w1)
+
+
+def backpropagation(y, ans, n1, x1):  
+    loss_y_derivative = 2*(y - GOAL)
+
+
+    y_ans_derivative = ans *  math.e**-ans / (1 + math.e**-ans)**2
+    loss_ans_derivative = loss_y_derivative * y_ans_derivative
+
+
+    ans_n1_derivative = 1
+    loss_n1_derivative = loss_ans_derivative * ans_n1_derivative
+
+
+    n1_w1_derivative = x1
+    loss_w1_derivative = loss_n1_derivative * n1_w1_derivative
+
+
+    return loss_w1_derivative
+I realize you might have some questions about why I did various things, feel free to ask.  I didn't discuss any of the theory here to try to keep it brief
